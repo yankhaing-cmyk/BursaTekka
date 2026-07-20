@@ -38,12 +38,14 @@ CONFIG = {
     "MIN_ADV_RM": 1_000_000,        # min 20-day average daily traded VALUE (RM)
     "ADV_WINDOW": 20,               # days for ADV calc
     "HISTORY_BARS": 260,            # ~1 trading year of daily bars
-    "MOMENTUM_LOOKBACK": 126,       # 6-month momentum
+    "MOMENTUM_LOOKBACK": 126,       # PRIMARY momentum window (~6 months)
     "MOMENTUM_SKIP": 21,            # skip most recent month (classic 12-1 style)
+    "MOMENTUM_LOOKBACK_2": 10,      # SECONDARY fast momentum window (~2 weeks)
+    "MOMENTUM_SKIP_2": 0,           # no skip on the fast window
     "SHORT_REVERSION_WINDOW": 5,    # 5-day z-score for mean reversion
     "REVERSION_ZSCORE": -2.0,       # oversold threshold
     "LOW_VOL_WINDOW": 60,           # realized vol window for defensive screen
-    "TOP_N": 15,                    # names shown per bucket in Telegram
+    "TOP_N": 30,                    # names shown per bucket in Telegram
     "BATCH_PAUSE_SEC": 0.35,        # throttle between symbol fetches
     "MAX_WORKERS_YF": 8,            # yfinance concurrent threads
     "UNIVERSE_FILE": "data/universe.csv",
@@ -270,6 +272,13 @@ def compute_metrics(df: pd.DataFrame) -> dict | None:
     else:
         mom = np.nan
 
+    # ~2-week fast momentum (secondary bucket)
+    lb2, skip2 = c["MOMENTUM_LOOKBACK_2"], c["MOMENTUM_SKIP_2"]
+    if len(close) > lb2 + skip2 + 1:
+        mom2 = float(close.iloc[-1 - skip2] / close.iloc[-1 - skip2 - lb2] - 1)
+    else:
+        mom2 = np.nan
+
     # 5-day z-score vs 60-day distribution (mean reversion)
     r5 = close.pct_change(c["SHORT_REVERSION_WINDOW"])
     mu, sd = r5.rolling(60).mean().iloc[-1], r5.rolling(60).std().iloc[-1]
@@ -289,6 +298,7 @@ def compute_metrics(df: pd.DataFrame) -> dict | None:
         "ret_1d": ret_1d,
         "adv_rm": adv_rm,
         "momentum_6m": mom,
+        "momentum_2w": mom2,
         "zscore_5d": z5,
         "realized_vol": rv,
         "above_ma50": above_ma50,
@@ -330,6 +340,9 @@ def build_buckets(liquid: pd.DataFrame, regime: Regime) -> dict:
 
     mom = liquid.dropna(subset=["momentum_6m"]).sort_values("momentum_6m", ascending=False)
     out["momentum"] = mom.head(n)
+
+    mom2 = liquid.dropna(subset=["momentum_2w"]).sort_values("momentum_2w", ascending=False)
+    out["momentum_fast"] = mom2.head(n)
 
     defense = liquid.dropna(subset=["realized_vol"]).sort_values("realized_vol").head(n)
     out["defensive"] = defense
@@ -387,6 +400,8 @@ def build_message(regime: Regime, buckets: dict, universe_size: int, liquid_size
 
     lines += ["", "🚀 *Top momentum (6m)*"]
     lines += block(buckets["momentum"], "momentum_6m", lambda v: f"{v:+.1%}")
+    lines += ["", "⚡ *Top momentum (2w — fast/experimental)*"]
+    lines += block(buckets["momentum_fast"], "momentum_2w", lambda v: f"{v:+.1%}")
     lines += ["", "🛡 *Lowest realized vol*"]
     lines += block(buckets["defensive"], "realized_vol", lambda v: f"{v:.0%}")
     lines += ["", "↩️ *Oversold (5d z ≤ -2)*"]

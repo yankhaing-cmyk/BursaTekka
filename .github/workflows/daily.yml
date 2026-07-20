@@ -1,0 +1,48 @@
+name: Bursa Daily Screener
+
+on:
+  schedule:
+    # 09:30 UTC = 17:30 MYT, ~30 min after Bursa close (16:50 MYT)
+    - cron: "30 9 * * 1-5"
+  workflow_dispatch: {}          # manual run from GitHub UI
+  repository_dispatch:           # triggered by Cloudflare Worker /run
+    types: [run-screener]
+
+concurrency:
+  group: bursa-screener
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120          # ~1000 symbols with throttling takes a while
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run screener
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TV_USERNAME: ${{ secrets.TV_USERNAME }}       # optional
+          TV_PASSWORD: ${{ secrets.TV_PASSWORD }}       # optional
+        run: python screener.py
+
+      - name: Commit snapshot (optional audit trail)
+        if: success()
+        run: |
+          git config user.name "screener-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/snapshots/ data/universe.csv || true
+          git diff --cached --quiet || git commit -m "snapshot: $(date -u +%F)"
+          git push || true

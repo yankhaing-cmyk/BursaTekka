@@ -38,10 +38,16 @@ CONFIG = {
     "MIN_ADV_RM": 1_000_000,        # min 20-day average daily traded VALUE (RM)
     "ADV_WINDOW": 20,               # days for ADV calc
     "HISTORY_BARS": 260,            # ~1 trading year of daily bars
-    "MOMENTUM_LOOKBACK": 126,       # PRIMARY momentum window (~6 months)
-    "MOMENTUM_SKIP": 21,            # skip most recent month (classic 12-1 style)
-    "MOMENTUM_LOOKBACK_2": 10,      # SECONDARY fast momentum window (~2 weeks)
-    "MOMENTUM_SKIP_2": 0,           # no skip on the fast window
+    # Momentum windows: list of (label, lookback_days, skip_days).
+    # 6-month is the proven core; the shorter ones are experimental/fast.
+    # Trim or extend this list freely — everything downstream adapts.
+    "MOMENTUM_WINDOWS": [
+        ("6m", 126, 21),   # PRIMARY (classic 12-1 style skip)
+        ("1m", 21, 0),     # 1 month
+        ("2w", 10, 0),     # 2 weeks
+        ("1w", 5, 0),      # 1 week
+    ],
+    "REGIME_MOMENTUM_KEY": "6m",   # which window the BULL headline uses
     "SHORT_REVERSION_WINDOW": 5,    # 5-day z-score for mean reversion
     "REVERSION_ZSCORE": -2.0,       # oversold threshold
     "LOW_VOL_WINDOW": 60,           # realized vol window for defensive screen
@@ -265,19 +271,15 @@ def compute_metrics(df: pd.DataFrame) -> dict | None:
     if not np.isfinite(adv_rm):
         return None
 
-    # 6m momentum, skipping last month
-    lb, skip = c["MOMENTUM_LOOKBACK"], c["MOMENTUM_SKIP"]
-    if len(close) > lb + skip:
-        mom = float(close.iloc[-1 - skip] / close.iloc[-1 - skip - lb] - 1)
-    else:
-        mom = np.nan
-
-    # ~2-week fast momentum (secondary bucket)
-    lb2, skip2 = c["MOMENTUM_LOOKBACK_2"], c["MOMENTUM_SKIP_2"]
-    if len(close) > lb2 + skip2 + 1:
-        mom2 = float(close.iloc[-1 - skip2] / close.iloc[-1 - skip2 - lb2] - 1)
-    else:
-        mom2 = np.nan
+    # Momentum for each configured window -> keys like "momentum_6m"
+    mom_vals = {}
+    for label, lb, skip in c["MOMENTUM_WINDOWS"]:
+        if len(close) > lb + skip + 1:
+            mom_vals[f"momentum_{label}"] = float(
+                close.iloc[-1 - skip] / close.iloc[-1 - skip - lb] - 1
+            )
+        else:
+            mom_vals[f"momentum_{label}"] = np.nan
 
     # 5-day z-score vs 60-day distribution (mean reversion)
     r5 = close.pct_change(c["SHORT_REVERSION_WINDOW"])
@@ -293,16 +295,16 @@ def compute_metrics(df: pd.DataFrame) -> dict | None:
 
     ret_1d = float(close.iloc[-1] / close.iloc[-2] - 1) if len(close) > 1 else np.nan
 
-    return {
+    metrics = {
         "price": round(float(close.iloc[-1]), 3),
         "ret_1d": ret_1d,
         "adv_rm": adv_rm,
-        "momentum_6m": mom,
-        "momentum_2w": mom2,
         "zscore_5d": z5,
         "realized_vol": rv,
         "above_ma50": above_ma50,
     }
+    metrics.update(mom_vals)
+    return metrics
 
 
 # ----------------------------------------------------------------------------
@@ -338,11 +340,12 @@ def build_buckets(liquid: pd.DataFrame, regime: Regime) -> dict:
     n = CONFIG["TOP_N"]
     out = {}
 
-    mom = liquid.dropna(subset=["momentum_6m"]).sort_values("momentum_6m", ascending=False)
-    out["momentum"] = mom.head(n)
-
-    mom2 = liquid.dropna(subset=["momentum_2w"]).sort_values("momentum_2w", ascending=False)
-    out["momentum_fast"] = mom2.head(n)
+    # One ranked bucket per momentum window, keyed "mom_<label>"
+    for label, _lb, _skip in CONFIG["MOMENTUM_WINDOWS"]:
+        col = f"momentum_{label}"
+        out[f"mom_{label}"] = (
+            liquid.dropna(subset=[col]).sort_values(col, ascending=False).head(n)
+        )
 
     defense = liquid.dropna(subset=["realized_vol"]).sort_values("realized_vol").head(n)
     out["defensive"] = defense
@@ -352,8 +355,9 @@ def build_buckets(liquid: pd.DataFrame, regime: Regime) -> dict:
         .sort_values("zscore_5d").head(n)
 
     # Regime-weighted headline picks
+    reg_key = f"mom_{CONFIG['REGIME_MOMENTUM_KEY']}"
     if regime.label == "BULL":
-        out["primary"], out["primary_label"] = out["momentum"], "Momentum (bull regime)"
+        out["primary"], out["primary_label"] = out[reg_key], "Momentum (bull regime)"
     elif regime.label == "BEAR":
         out["primary"], out["primary_label"] = out["defensive"], "Low-vol defensive (bear regime)"
     else:
@@ -391,17 +395,25 @@ def build_message(regime: Regime, buckets: dict, universe_size: int, liquid_size
             for _, r in df.iterrows()
         ]
 
+    reg_mom_col = f"momentum_{CONFIG['REGIME_MOMENTUM_KEY']}"
     lines += block(buckets["primary"],
-                   "momentum_6m" if regime.label == "BULL"
+                   reg_mom_col if regime.label == "BULL"
                    else "realized_vol" if regime.label == "BEAR" else "zscore_5d",
                    (lambda v: f"{v:+.1%}") if regime.label == "BULL"
                    else (lambda v: f"vol {v:.0%}") if regime.label == "BEAR"
                    else (lambda v: f"z {v:.1f}"))
 
-    lines += ["", "🚀 *Top momentum (6m)*"]
-    lines += block(buckets["momentum"], "momentum_6m", lambda v: f"{v:+.1%}")
-    lines += ["", "⚡ *Top momentum (2w — fast/experimental)*"]
-    lines += block(buckets["momentum_fast"], "momentum_2w", lambda v: f"{v:+.1%}")
+    # One momentum block per configured window
+    core_key = CONFIG["REGIME_MOMENTUM_KEY"]
+    window_names = {"6m": "6 months", "3m": "3 months", "1m": "1 month",
+                    "2w": "2 weeks", "1w": "1 week"}
+    for label, _lb, _skip in CONFIG["MOMENTUM_WINDOWS"]:
+        tag = "core" if label == core_key else "fast/experimental"
+        icon = "🚀" if label == core_key else "⚡"
+        pretty = window_names.get(label, label)
+        lines += ["", f"{icon} *Top momentum ({pretty} — {tag})*"]
+        lines += block(buckets[f"mom_{label}"], f"momentum_{label}", lambda v: f"{v:+.1%}")
+
     lines += ["", "🛡 *Lowest realized vol*"]
     lines += block(buckets["defensive"], "realized_vol", lambda v: f"{v:.0%}")
     lines += ["", "↩️ *Oversold (5d z ≤ -2)*"]

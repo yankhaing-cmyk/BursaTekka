@@ -1,0 +1,10 @@
+name = "bursa-screener-trigger"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-01-01"
+
+# Set secrets after deploy:
+#   wrangler secret put GH_TOKEN
+#   wrangler secret put GH_OWNER
+#   wrangler secret put GH_REPO
+#   wrangler secret put RUN_KEY
+#   wrangler secret put TG_TOKEN   (optional, for /run via Telegram chat)

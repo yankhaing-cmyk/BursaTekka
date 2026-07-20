@@ -1,0 +1,51 @@
+code,name,tv_symbol,yf_symbol,sector
+1155,Malayan Banking,MAYBANK,1155.KL,Financials
+1295,Public Bank,PBBANK,1295.KL,Financials
+1023,CIMB Group,CIMB,1023.KL,Financials
+5225,IHH Healthcare,IHH,5225.KL,Healthcare
+5347,Tenaga Nasional,TENAGA,5347.KL,Utilities
+6033,Petronas Gas,PETGAS,6033.KL,Energy
+5183,Petronas Chemicals,PCHEM,5183.KL,Materials
+6947,Digi/CelcomDigi,CDB,6947.KL,Telco
+4863,Telekom Malaysia,TM,4863.KL,Telco
+6012,Maxis,MAXIS,6012.KL,Telco
+4197,Sime Darby,SIME,4197.KL,Industrials
+5285,Sime Darby Plantation/SD Guthrie,SDG,5285.KL,Plantation
+2445,Kuala Lumpur Kepong,KLK,2445.KL,Plantation
+1961,IOI Corporation,IOICORP,1961.KL,Plantation
+8869,Press Metal,PMETAL,8869.KL,Materials
+5681,Petronas Dagangan,PETDAG,5681.KL,Energy
+4707,Nestle Malaysia,NESTLE,4707.KL,Consumer
+4065,PPB Group,PPB,4065.KL,Consumer
+3816,MISC,MISC,3816.KL,Transport
+5819,Hong Leong Bank,HLBANK,5819.KL,Financials
+1082,Hong Leong Financial,HLFG,1082.KL,Financials
+1015,AMMB Holdings,AMBANK,1015.KL,Financials
+5185,Affin Bank,AFFIN,5185.KL,Financials
+2488,Alliance Bank,ABMB,2488.KL,Financials
+1066,RHB Bank,RHBBANK,1066.KL,Financials
+1818,Bursa Malaysia,BURSA,1818.KL,Financials
+6742,YTL Power,YTLPOWR,6742.KL,Utilities
+4677,YTL Corp,YTL,4677.KL,Utilities
+5398,Gamuda,GAMUDA,5398.KL,Construction
+3336,IJM Corp,IJM,3336.KL,Construction
+5211,Sunway,SUNWAY,5211.KL,Construction
+1562,Berjaya Sports Toto,BJTOTO,1562.KL,Consumer
+4715,Genting Malaysia,GENM,4715.KL,Consumer
+3182,Genting,GENTING,3182.KL,Consumer
+7113,Top Glove,TOPGLOV,7113.KL,Healthcare
+5168,Hartalega,HARTA,5168.KL,Healthcare
+7153,Kossan Rubber,KOSSAN,7153.KL,Healthcare
+0166,Inari Amertron,INARI,0166.KL,Technology
+0208,Greatech,GREATEC,0208.KL,Technology
+0097,ViTrox,VITROX,0097.KL,Technology
+0128,Frontken,FRONTKN,0128.KL,Technology
+5236,Matrix Concepts,MATRIX,5236.KL,Property
+8583,Mah Sing,MAHSING,8583.KL,Property
+5288,Sime Darby Property,SIMEPROP,5288.KL,Property
+6888,Axiata,AXIATA,6888.KL,Telco
+5099,AirAsia/Capital A,CAPITALA,5099.KL,Transport
+7084,QL Resources,QL,7084.KL,Consumer
+7106,Supermax,SUPERMX,7106.KL,Healthcare
+5878,KPJ Healthcare,KPJ,5878.KL,Healthcare
+0138,MyEG Services,MYEG,0138.KL,Technology
